@@ -17,6 +17,7 @@ sg_buffer vbuf{};
 sg_buffer ibuf{};
 sg_pipeline pip{};
 sg_bindings bind{};
+uint32_t pixel_buffer[NES_WIDTH * NES_HEIGHT];
 
 NES* nes;
 
@@ -71,18 +72,13 @@ void main() {
   frag_color = texture(tex, uv);
 }
 )";
-    uint32_t pixels[4*4] = {
-            0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF, 0xFF000000,
-            0xFF000000, 0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF,
-            0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF, 0xFF000000,
-            0xFF000000, 0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF,
-    };
-    /* NOTE: SLOT_tex is provided by shader code generation */
+
     sg_image_desc img_desc = {};
-    img_desc.width = 4;
-    img_desc.height = 4;
-    img_desc.data.subimage[0][0] = SG_RANGE(pixels);
-    img_desc.label = "cube-texture";
+    img_desc.width = NES_WIDTH;
+    img_desc.height = NES_HEIGHT;
+    img_desc.label = "nes-texture";
+    img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+    img_desc.usage = SG_USAGE_STREAM;
 
     sg_shader shd = sg_make_shader(&shd_desc);
 
@@ -101,6 +97,25 @@ void main() {
 }
 
 void frame() {
+    const double dt = sapp_frame_duration();
+    // processe input
+//    nes->controller1->buttons = controller1;
+    nes->controller1->buttons = 0;
+    nes->controller2->buttons = 0;
+
+    // step the NES state forward by 'dt' seconds, or more if in fast-forward
+    emulate(nes, dt);
+
+    for (int y = 0; y < NES_HEIGHT; y++) {
+        for (int x = 0; x < NES_WIDTH; x++) {
+            pixel_buffer[y * NES_WIDTH + x] = nes->ppu->front[y * NES_WIDTH +  x];
+        }
+    }
+
+    sg_image_data image_data{};
+    image_data.subimage[0][0] = SG_RANGE(pixel_buffer);
+    sg_update_image(bind.fs_images[0], image_data);
+
     sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
     sg_apply_pipeline(pip);
     sg_apply_bindings(&bind);
@@ -117,7 +132,20 @@ void input(const sapp_event* event) {
 
 }
 
-int main() {
+int main(int argc, const char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Please pass ROM path as first parameter.\n";
+        return EXIT_FAILURE;
+    }
+
+    char* SRAM_path = new char[strlen(argv[1]) + 1];
+    strcpy(SRAM_path, argv[1]);
+    strcat(SRAM_path, ".srm");
+
+    std::cout << "Initializing NES..." << std::endl;
+    nes = new NES(argv[1], SRAM_path);
+    if (!nes->initialized) return EXIT_FAILURE;
+
     sapp_desc desc = {};
     desc.init_cb = init;
     desc.frame_cb = frame;
@@ -129,5 +157,18 @@ int main() {
     desc.icon.sokol_default = true,
     desc.logger.func = slog_func;
     sapp_run(desc);
+
+    // save SRAM back to file
+    if (nes->cartridge->battery_present) {
+        std::cout << std::endl << "Writing SRAM..." << std::endl;
+        FILE* fp = fopen(SRAM_path, "wb");
+        if (fp == nullptr || (fwrite(nes->cartridge->SRAM, 8192, 1, fp) != 1)) {
+            std::cout << "WARN: failed to save SRAM file!" << std::endl;
+        }
+        else {
+            fclose(fp);
+        }
+    }
+
     return 0;
 }
