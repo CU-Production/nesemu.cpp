@@ -17,7 +17,6 @@ sg_buffer vbuf{};
 sg_buffer ibuf{};
 sg_pipeline pip{};
 sg_bindings bind{};
-uint32_t pixel_buffer[NES_WIDTH * NES_HEIGHT];
 
 NES* nes;
 
@@ -107,14 +106,8 @@ void frame() {
     // step the NES state forward by 'dt' seconds, or more if in fast-forward
     emulate(nes, dt);
 
-    for (int y = 0; y < NES_HEIGHT; y++) {
-        for (int x = 0; x < NES_WIDTH; x++) {
-            pixel_buffer[y * NES_WIDTH + x] = nes->ppu->front[y * NES_WIDTH +  x];
-        }
-    }
-
     sg_image_data image_data{};
-    image_data.subimage[0][0] = SG_RANGE(pixel_buffer);
+    image_data.subimage[0][0] = { .ptr=nes->ppu->front, .size=(NES_WIDTH * NES_HEIGHT * sizeof(uint32_t)) };
     sg_update_image(bind.fs_images[0], image_data);
 
     sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
