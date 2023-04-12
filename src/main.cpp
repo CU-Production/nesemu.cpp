@@ -20,12 +20,20 @@ sg_bindings bind{};
 
 NES* nes;
 uint8_t controller1{0};
+constexpr auto BUF_SIZE = 32;
+float audio_buf[BUF_SIZE];
+int audio_buf_pos = 0;
 
 void init() {
     sg_desc desc = {};
     desc.context = sapp_sgcontext();
     desc.logger.func = slog_func;
     sg_setup(&desc);
+
+    saudio_desc as_desc = {};
+    as_desc.logger.func = slog_func;
+    saudio_setup(&as_desc);
+    assert(saudio_channels() == 1);
 
     const float vertices[] = {
             // positions     uv
@@ -116,9 +124,22 @@ void frame() {
     sg_draw(0, 6, 1);
     sg_end_pass();
     sg_commit();
+
+    int num_frames = saudio_expect();
+    for (int i = 0; i < num_frames; i++) {
+        if (i < nes->apu->stream.size()) {
+            audio_buf[audio_buf_pos++] = nes->apu->stream.front();
+            nes->apu->stream.erase(nes->apu->stream.begin());
+            if (audio_buf_pos == BUF_SIZE) {
+                audio_buf_pos = 0;
+                saudio_push(audio_buf, BUF_SIZE);
+            }
+        }
+    }
 }
 
 void cleanup() {
+    saudio_shutdown();
     sg_shutdown();
 }
 
