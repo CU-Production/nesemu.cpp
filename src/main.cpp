@@ -70,6 +70,7 @@ in vec2 uv;
 out vec4 frag_color;
 void main() {
   frag_color = texture(tex, uv);
+  //frag_color = pow(frag_color, vec4(1.0f/2.2f));
 }
 )";
 
