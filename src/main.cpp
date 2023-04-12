@@ -19,6 +19,7 @@ sg_pipeline pip{};
 sg_bindings bind{};
 
 NES* nes;
+uint8_t controller1{0};
 
 void init() {
     sg_desc desc = {};
@@ -99,8 +100,7 @@ void main() {
 void frame() {
     const double dt = sapp_frame_duration();
     // processe input
-//    nes->controller1->buttons = controller1;
-    nes->controller1->buttons = 0;
+    nes->controller1->buttons = controller1;
     nes->controller2->buttons = 0;
 
     // step the NES state forward by 'dt' seconds, or more if in fast-forward
@@ -123,7 +123,37 @@ void cleanup() {
 }
 
 void input(const sapp_event* event) {
-
+    switch (event->type) {
+        case SAPP_EVENTTYPE_KEY_DOWN: {
+            switch (event->key_code) {
+                case SAPP_KEYCODE_Z:         controller1 |= 0b00000001; break;
+                case SAPP_KEYCODE_X:         controller1 |= 0b00000010; break;
+                case SAPP_KEYCODE_BACKSPACE: controller1 |= 0b00000100; break;
+                case SAPP_KEYCODE_ENTER:     controller1 |= 0b00001000; break;
+                case SAPP_KEYCODE_UP:        controller1 |= 0b00010000; break;
+                case SAPP_KEYCODE_DOWN:      controller1 |= 0b00100000; break;
+                case SAPP_KEYCODE_LEFT:      controller1 |= 0b01000000; break;
+                case SAPP_KEYCODE_RIGHT:     controller1 |= 0b10000000; break;
+                default: break;
+            }
+            break;
+        }
+        case SAPP_EVENTTYPE_KEY_UP: {
+            switch (event->key_code) {
+                case SAPP_KEYCODE_Z:         controller1 &= 0b11111110; break;
+                case SAPP_KEYCODE_X:         controller1 &= 0b11111101; break;
+                case SAPP_KEYCODE_BACKSPACE: controller1 &= 0b11111011; break;
+                case SAPP_KEYCODE_ENTER:     controller1 &= 0b11110111; break;
+                case SAPP_KEYCODE_UP:        controller1 &= 0b11101111; break;
+                case SAPP_KEYCODE_DOWN:      controller1 &= 0b11011111; break;
+                case SAPP_KEYCODE_LEFT:      controller1 &= 0b10111111; break;
+                case SAPP_KEYCODE_RIGHT:     controller1 &= 0b01111111; break;
+                default: break;
+            }
+            break;
+        }
+        default: break;
+    }
 }
 
 int main(int argc, const char* argv[]) {
