@@ -20,9 +20,7 @@ sg_bindings bind{};
 
 NES* nes;
 uint8_t controller1{0};
-constexpr auto BUF_SIZE = 32;
-float audio_buf[BUF_SIZE];
-int audio_buf_pos = 0;
+void audioCallback(float* buffer, int num_frames, int num_channels, void* user_data);
 
 void init() {
     sg_desc desc = {};
@@ -32,8 +30,13 @@ void init() {
 
     saudio_desc as_desc = {};
     as_desc.logger.func = slog_func;
+    as_desc.buffer_frames = 1024;
+    as_desc.num_channels = 2;
+    as_desc.stream_userdata_cb = audioCallback;
+    as_desc.user_data = nes;
     saudio_setup(&as_desc);
-    assert(saudio_channels() == 1);
+    assert(as_desc.user_data);
+    // assert(saudio_channels() == 1);
 
     const float vertices[] = {
             // positions     uv
@@ -124,18 +127,6 @@ void frame() {
     sg_draw(0, 6, 1);
     sg_end_pass();
     sg_commit();
-
-    int num_frames = saudio_expect();
-    for (int i = 0; i < num_frames; i++) {
-        if (i < nes->apu->stream.size()) {
-            audio_buf[audio_buf_pos++] = nes->apu->stream.front();
-            nes->apu->stream.erase(nes->apu->stream.begin());
-            if (audio_buf_pos == BUF_SIZE) {
-                audio_buf_pos = 0;
-                saudio_push(audio_buf, BUF_SIZE);
-            }
-        }
-    }
 }
 
 void cleanup() {
@@ -216,4 +207,18 @@ int main(int argc, const char* argv[]) {
     }
 
     return 0;
+}
+
+void audioCallback(float* buffer, int num_frames, int num_channels, void* user_data) {
+    NES* nes = (NES*)user_data;
+
+    nes->apu->streamMutex.lock();
+    for (int i = 0; i < num_frames; i++) {
+        if (i < nes->apu->stream.size()) {
+            buffer[i*2+0] = nes->apu->stream.front();
+            buffer[i*2+1] = nes->apu->stream.front();
+            nes->apu->stream.erase(nes->apu->stream.begin());
+        }
+    }
+    nes->apu->streamMutex.unlock();
 }
