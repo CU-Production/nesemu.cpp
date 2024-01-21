@@ -31,12 +31,12 @@ void init() {
     saudio_desc as_desc = {};
     as_desc.logger.func = slog_func;
     as_desc.buffer_frames = 1024;
-    as_desc.num_channels = 2;
+    // as_desc.num_channels = 2;
     as_desc.stream_userdata_cb = audioCallback;
     as_desc.user_data = nes;
     saudio_setup(&as_desc);
     assert(as_desc.user_data);
-    // assert(saudio_channels() == 1);
+    assert(saudio_channels() == 1);
 
     const float vertices[] = {
             // positions     uv
@@ -215,8 +215,9 @@ void audioCallback(float* buffer, int num_frames, int num_channels, void* user_d
     nes->apu->streamMutex.lock();
     for (int i = 0; i < num_frames; i++) {
         if (i < nes->apu->stream.size()) {
-            buffer[i*2+0] = nes->apu->stream.front();
-            buffer[i*2+1] = nes->apu->stream.front();
+            // buffer[i*2+0] = nes->apu->stream.front();
+            // buffer[i*2+1] = nes->apu->stream.front();
+            buffer[i] = nes->apu->stream.front();
             nes->apu->stream.erase(nes->apu->stream.begin());
         }
     }
