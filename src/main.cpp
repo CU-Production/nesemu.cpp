@@ -1,6 +1,6 @@
 #define SOKOL_IMPL
 #define SOKOL_NO_ENTRY
-#define SOKOL_GLCORE33
+#define SOKOL_GLCORE
 #include "sokol_app.h"
 #include "sokol_audio.h"
 #include "sokol_gfx.h"
@@ -24,7 +24,7 @@ void audioCallback(float* buffer, int num_frames, int num_channels, void* user_d
 
 void init() {
     sg_desc desc = {};
-    desc.context = sapp_sgcontext();
+    desc.environment = sglue_environment();
     desc.logger.func = slog_func;
     sg_setup(&desc);
 
@@ -51,14 +51,14 @@ void init() {
 
     const int indices[] = { 0, 1, 2, 0, 2, 3, };
     sg_buffer_desc ib_desc = {};
-    ib_desc.type = SG_BUFFERTYPE_INDEXBUFFER;
+    ib_desc.usage.index_buffer = true;
     ib_desc.data = SG_RANGE(indices);
     ibuf = sg_make_buffer(&ib_desc);
 
     sg_shader_desc shd_desc = {};
-    shd_desc.attrs[0].name = "position";
-    shd_desc.attrs[1].name = "texcoord0";
-    shd_desc.vs.source = R"(
+    shd_desc.attrs[0].glsl_name = "position";
+    shd_desc.attrs[1].glsl_name = "texcoord0";
+    shd_desc.vertex_func.source = R"(
 #version 330
 layout(location=0) in vec3 position;
 layout(location=1) in vec2 texcoord0;
@@ -70,10 +70,10 @@ void main() {
   color = vec4(uv, 0.0f, 1.0f);
 }
 )";
-    shd_desc.fs.images[0].name = "tex";
-    shd_desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-    shd_desc.fs.images[0].sampler_type = SG_SAMPLERTYPE_FLOAT;
-    shd_desc.fs.source = R"(
+//    shd_desc.images[0].name = "tex";
+    shd_desc.images[0].image_type = SG_IMAGETYPE_2D;
+    shd_desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+    shd_desc.fragment_func.source = R"(
 #version 330
 uniform sampler2D tex;
 in vec4 color;
@@ -90,7 +90,7 @@ void main() {
     img_desc.height = NES_HEIGHT;
     img_desc.label = "nes-texture";
     img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-    img_desc.usage = SG_USAGE_STREAM;
+    img_desc.usage.stream_update = true;
 
     sg_shader shd = sg_make_shader(&shd_desc);
 
@@ -103,9 +103,13 @@ void main() {
 
     bind.vertex_buffers[0] = vbuf;
     bind.index_buffer = ibuf;
-    bind.fs_images[0] = sg_make_image(&img_desc);
+    bind.images[0] = sg_make_image(&img_desc);
 
-    pass_action.colors[0] = { .action=SG_ACTION_CLEAR, .value={0.5f, 0.0f, 0.0f, 1.0f} };
+    pass_action.colors[0] = {
+        .load_action = SG_LOADACTION_CLEAR,
+        .store_action = SG_STOREACTION_STORE,
+        .clear_value = {0.1, 0.2, 0.3, 1},
+    };
 }
 
 void frame() {
@@ -119,9 +123,9 @@ void frame() {
 
     sg_image_data image_data{};
     image_data.subimage[0][0] = { .ptr=nes->ppu->front, .size=(NES_WIDTH * NES_HEIGHT * sizeof(uint32_t)) };
-    sg_update_image(bind.fs_images[0], image_data);
+    sg_update_image(bind.images[0], image_data);
 
-    sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
+    sg_begin_pass({ .action = pass_action, .swapchain = sglue_swapchain(), .label = "main pass" });
     sg_apply_pipeline(pip);
     sg_apply_bindings(&bind);
     sg_draw(0, 6, 1);
